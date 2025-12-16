@@ -3,11 +3,13 @@ import {
     Text,
     Pressable,
     useWindowDimensions,
+    ScrollView,
 } from 'react-native';
 import { useEffect, useState, useMemo } from 'react';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useLocation } from '@/context/LocationContext';
+import { useSchoolYear } from '@/context/SchoolYearContext';
 
 import * as ScreenOrientation from 'expo-screen-orientation';
 import MapView, { Marker } from 'react-native-maps';
@@ -26,92 +28,119 @@ type Vacation = {
 };
 
 export default function IndexScreen() {
-    // Locatie Storage
     const [userLocation, setUserLocation] =
         useState<Location.LocationObject | null>(null);
-    const [locationError, setLocationError] = useState<string | null>(null);
 
-
-    // Scherm draaien
-    useEffect(() => {
-        ScreenOrientation.unlockAsync();
-
-        return () => {
-            ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-        };
-    }, []);
     const { width, height } = useWindowDimensions();
     const isLandscape = width > height;
 
     const { location, setLocation, isLoaded } = useLocation();
+    const { schoolYear, setSchoolYear, isLoaded: yearLoaded } = useSchoolYear();
+
     const [vacationData, setVacationData] = useState<Vacation[]>([]);
-    const [countdown, setCountdown] = useState<string>('');
+
+    // Scherm draaien
+    useEffect(() => {
+        ScreenOrientation.unlockAsync();
+        return () =>
+            ScreenOrientation.lockAsync(
+                ScreenOrientation.OrientationLock.PORTRAIT_UP
+            );
+    }, []);
 
     // Vakantie Data
     useEffect(() => {
         const getVacationData = async () => {
             try {
                 const request = await fetch(
-                    'https://opendata.rijksoverheid.nl/v1/sources/rijksoverheid/infotypes/schoolholidays/schoolyear/2025-2026?output=json'
+                    `https://opendata.rijksoverheid.nl/v1/sources/rijksoverheid/infotypes/schoolholidays/schoolyear/${schoolYear}?output=json`
                 );
                 const data = await request.json();
 
-                const vacations: Vacation[] = data.content[0]?.vacations.map((v: any) => ({
-                    type: v.type.trim(),
-                    compulsorydates: v.compulsorydates,
-                    regions: v.regions.map((r: any) => ({
-                        region: r.region.trim().toLowerCase(),
-                        startdate: r.startdate,
-                        enddate: r.enddate,
-                    })),
-                })) ?? [];
+                const vacations: Vacation[] =
+                    data.content[0]?.vacations.map((v: any) => ({
+                        type: v.type.trim(),
+                        compulsorydates: v.compulsorydates,
+                        regions: v.regions.map((r: any) => ({
+                            region: r.region.trim().toLowerCase(),
+                            startdate: r.startdate,
+                            enddate: r.enddate,
+                        })),
+                    })) ?? [];
+
                 setVacationData(vacations);
-            } catch (error) {
-                console.error('Failed to load vacation data:', error);
+            } catch (e) {
+                console.error(e);
             }
         };
-        getVacationData();
-    }, []);
 
-    // Bereken volgende vakantie
+        getVacationData();
+    }, [schoolYear]);
+
+    // Volgende Vakantie
     const nextVacation = useMemo(() => {
-        if (!vacationData.length) return null;
         const today = new Date();
 
-        const filtered: { type: string; start: string; end: string }[] = [];
-
-        vacationData.forEach((vac) => {
-            vac.regions.forEach((r) => {
-                filtered.push({ type: vac.type, start: r.startdate, end: r.enddate });
-            });
-        });
-
-        const upcoming = filtered
+        return vacationData
+            .flatMap((vac) =>
+                vac.regions
+                    .filter(
+                        (r) =>
+                            r.region === location.toLowerCase() ||
+                            r.region === 'heel nederland'
+                    )
+                    .map((r) => ({
+                        type: vac.type,
+                        start: r.startdate,
+                        end: r.enddate,
+                    }))
+            )
             .filter((v) => new Date(v.start) >= today)
-            .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+            .sort(
+                (a, b) =>
+                    new Date(a.start).getTime() -
+                    new Date(b.start).getTime()
+            )[0] ?? null;
+    }, [vacationData, location]);
 
-        return upcoming[0] ?? null;
-    }, [vacationData]);
+    // Alle Vakanties
+    const vacationsForRegion = useMemo(() => {
+        return vacationData
+            .flatMap((vac) =>
+                vac.regions
+                    .filter(
+                        (r) =>
+                            r.region === location.toLowerCase() ||
+                            r.region === 'heel nederland'
+                    )
+                    .map((r) => ({
+                        type: vac.type,
+                        start: r.startdate,
+                        end: r.enddate,
+                    }))
+            )
+            .sort(
+                (a, b) =>
+                    new Date(a.start).getTime() -
+                    new Date(b.start).getTime()
+            );
+    }, [vacationData, location]);
 
-    // Haal GPS op
+    // GPS
     useEffect(() => {
         (async () => {
             const { status } =
                 await Location.requestForegroundPermissionsAsync();
-
             if (status !== 'granted') return;
 
-            const location = await Location.getCurrentPositionAsync({
+            const loc = await Location.getCurrentPositionAsync({
                 accuracy: Location.Accuracy.High,
             });
-
-            setUserLocation(location);
+            setUserLocation(loc);
         })();
     }, []);
 
-
-
-    if (!isLoaded) return <Text>Loading...</Text>;
+    if (!isLoaded || !yearLoaded) return <Text>Loading...</Text>;
 
     return (
         <ThemedView
@@ -122,7 +151,7 @@ export default function IndexScreen() {
         >
             {/* GPS */}
             <ThemedView style={styles.mapContainer}>
-                {userLocation ? (
+                {userLocation && (
                     <MapView
                         style={StyleSheet.absoluteFillObject}
                         initialRegion={{
@@ -133,79 +162,108 @@ export default function IndexScreen() {
                         }}
                         scrollEnabled={false}
                         zoomEnabled={false}
-                        rotateEnabled={false}
-                        pitchEnabled={false}
-                        toolbarEnabled={false}
                     >
-                        <Marker
-                            coordinate={{
-                                latitude: userLocation.coords.latitude,
-                                longitude: userLocation.coords.longitude,
-                            }}
-                            title="Jij bent hier"
-                        />
+                        <Marker coordinate={userLocation.coords} />
                     </MapView>
-
-                ) : (
-                    <Text>Kaart laden...</Text>
                 )}
             </ThemedView>
 
-
-
             {/* Vakantie Info */}
             <ThemedView style={styles.infoContainer}>
-                <ThemedText style={styles.title}>Eerstvolgende vakantie</ThemedText>
-                <ThemedText style={styles.subtitle}>({location} geselecteerd)</ThemedText>
+                <ThemedText style={styles.title}>
+                    Eerstvolgende vakantie
+                </ThemedText>
+                <ThemedText style={styles.subtitle}>
+                    {location} • {schoolYear}
+                </ThemedText>
 
                 {nextVacation ? (
                     <>
-                        <ThemedText style={styles.date}>{nextVacation.type}</ThemedText>
-                        <ThemedText style={styles.subtitle}>Van</ThemedText>
-                        <ThemedText style={styles.date}>{new Date(nextVacation.start)
-                            .toLocaleDateString('nl-NL', {
-                                weekday: 'long',
-                                day: '2-digit',
-                                month: 'short',
-                                year: 'numeric',
-                            })
-                            .replace(/^\w/, c => c.toUpperCase())}</ThemedText>
-                        <ThemedText style={styles.subtitle}>Tot</ThemedText>
-                        <ThemedText style={styles.date}>{new Date(nextVacation.end)
-                            .toLocaleDateString('nl-NL', {
-                                weekday: 'long',
-                                day: '2-digit',
-                                month: 'short',
-                                year: 'numeric',
-                            })
-                            .replace(/^\w/, c => c.toUpperCase())}</ThemedText>
+                        <ThemedText style={styles.date}>
+                            {nextVacation.type}
+                        </ThemedText>
+                        <ThemedText style={styles.subtitle}>
+                            {new Date(nextVacation.start).toLocaleDateString(
+                                'nl-NL',
+                                { day: '2-digit', month: 'short' }
+                            )}{' '}
+                            –{' '}
+                            {new Date(nextVacation.end).toLocaleDateString(
+                                'nl-NL',
+                                {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric',
+                                }
+                            )}
+                        </ThemedText>
                     </>
                 ) : (
-                    <Text>Geen aankomende vakanties gevonden</Text>
+                    <Text>Geen aankomende vakantie</Text>
                 )}
 
-                {/* Locatie Switchers */}
+                {/* Locatie */}
                 <ThemedView style={styles.locationRow}>
-                    {(['Noord', 'Midden', 'Zuid'] as const).map((item) => (
+                    {(['Noord', 'Midden', 'Zuid'] as const).map((l) => (
                         <Pressable
-                            key={item}
-                            onPress={() => setLocation(item)}
+                            key={l}
+                            onPress={() => setLocation(l)}
                             style={[
                                 styles.locationButton,
-                                location === item && styles.locationButtonActive,
+                                location === l &&
+                                styles.locationButtonActive,
                             ]}
                         >
-                            <Text
-                                style={[
-                                    styles.locationText,
-                                    location === item && styles.locationTextActive,
-                                ]}
-                            >
-                                {item}
-                            </Text>
+                            <Text>{l}</Text>
                         </Pressable>
                     ))}
                 </ThemedView>
+
+                {/* Schooljaren Switchers */}
+                <ThemedView style={styles.locationRow}>
+                    {[0, 1, 2].map((o) => {
+                        const y = `${new Date().getFullYear() + o}-${
+                            new Date().getFullYear() + o + 1
+                        }`;
+                        return (
+                            <Pressable
+                                key={y}
+                                onPress={() => setSchoolYear(y as any)}
+                                style={[
+                                    styles.locationButton,
+                                    schoolYear === y &&
+                                    styles.locationButtonActive,
+                                ]}
+                            >
+                                <Text>{o === 0 ? 'Huidig jaar' : y}</Text>
+                            </Pressable>
+                        );
+                    })}
+                </ThemedView>
+
+                {/* Alle Vakanties */}
+                <ThemedText style={styles.listTitle}>
+                    Alle vakanties
+                </ThemedText>
+
+                <ScrollView style={styles.listContainer}>
+                    {vacationsForRegion.map((v, i) => (
+                        <ThemedView key={i} style={styles.vacationItem}>
+                            <ThemedText style={styles.vacationType}>
+                                {v.type}
+                            </ThemedText>
+                            <ThemedText style={styles.vacationDates}>
+                                {new Date(v.start).toLocaleDateString(
+                                    'nl-NL'
+                                )}{' '}
+                                –{' '}
+                                {new Date(v.end).toLocaleDateString(
+                                    'nl-NL'
+                                )}
+                            </ThemedText>
+                        </ThemedView>
+                    ))}
+                </ScrollView>
             </ThemedView>
         </ThemedView>
     );
@@ -214,22 +272,39 @@ export default function IndexScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, padding: 16 },
     containerLandscape: { flexDirection: 'row' },
-    mapContainer: {
-        flex: 1,
-        borderRadius: 12,
-        backgroundColor: '#ddd',
-        justifyContent: 'center',
-        alignItems: 'center',
+    mapContainer: { flex: 1, borderRadius: 12, overflow: 'hidden' },
+    infoContainer: { flex: 1, padding: 16 },
+    title: { fontSize: 22, fontWeight: 'bold', textAlign: 'center' },
+    subtitle: { textAlign: 'center', marginBottom: 12 },
+    date: { fontSize: 20, textAlign: 'center' },
+
+    locationRow: {
+        flexDirection: 'row',
+        marginTop: 12,
+        borderRadius: 8,
         overflow: 'hidden',
     },
-    mapText: { fontSize: 18 },
-    infoContainer: { flex: 1, padding: 16, justifyContent: 'center' },
-    title: { fontSize: 22, fontWeight: 'bold', textAlign: 'center' },
-    subtitle: { textAlign: 'center', marginBottom: 16 },
-    date: { fontSize: 20, textAlign: 'center', marginVertical: 4 },
-    locationRow: { flexDirection: 'row', marginTop: 20, borderRadius: 8, overflow: 'hidden' },
-    locationButton: { flex: 1, paddingVertical: 12, backgroundColor: '#eee', alignItems: 'center' },
+    locationButton: {
+        flex: 1,
+        padding: 10,
+        backgroundColor: '#eee',
+        alignItems: 'center',
+    },
     locationButtonActive: { backgroundColor: '#9bbcf5' },
-    locationText: { fontSize: 16 },
-    locationTextActive: { fontWeight: 'bold' },
+
+    listTitle: {
+        marginTop: 20,
+        fontSize: 18,
+        fontWeight: 'bold',
+        textAlign: 'center',
+    },
+    listContainer: { maxHeight: 260 },
+    vacationItem: {
+        backgroundColor: '#f2f2f2',
+        padding: 12,
+        borderRadius: 10,
+        marginTop: 10,
+    },
+    vacationType: { fontWeight: '600' },
+    vacationDates: { opacity: 0.7 },
 });

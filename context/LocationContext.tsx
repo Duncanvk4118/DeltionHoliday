@@ -17,7 +17,7 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
     const [location, setLocationState] = useState<Location>('Noord');
     const [isLoaded, setIsLoaded] = useState(false);
 
-    /* ===== Laad 1x bij app start ===== */
+    // Locatie Laden
     useEffect(() => {
         const loadLocation = async () => {
             const stored = await AsyncStorage.getItem(STORAGE_KEY);
@@ -43,7 +43,7 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
     );
 };
 
-/* ===== Custom hook ===== */
+// Een Hook maken
 export const useLocation = () => {
     const context = useContext(LocationContext);
     if (!context) {

@@ -1,11 +1,14 @@
 import {Tabs} from 'expo-router';
 import {Ionicons} from "@expo/vector-icons";
 import { LocationProvider } from '@/context/LocationContext';
+import {SchoolYearProvider} from "@/context/SchoolYearContext";
 
 export default function RootLayout() {
 
   return (
-      <LocationProvider>
+
+  <LocationProvider>
+      <SchoolYearProvider>
         <Tabs>
             <Tabs.Screen name="index" options={{
                 title: 'Overzicht',
@@ -23,6 +26,8 @@ export default function RootLayout() {
                 tabBarIcon: ({color, size}) => <Ionicons name={"person"} color={color} size={size}/>
             }} />
         </Tabs>
-      </LocationProvider>
+      </SchoolYearProvider>
+  </LocationProvider>
+
   );
 }
