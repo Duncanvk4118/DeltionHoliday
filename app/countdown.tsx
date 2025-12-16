@@ -208,8 +208,8 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
     },
     seasonImage: {
-        width: 410,
-        height: 410,
+        width: 500,
+        height: 500,
         borderRadius: 12,
     },
     mapText: { fontSize: 18 },

@@ -169,7 +169,7 @@ export default function IndexScreen() {
             </ThemedView>
 
             {/* Vakantie Info */}
-            <ThemedView style={styles.infoContainer}>
+            <ScrollView style={styles.infoContainer}>
                 <ThemedText style={styles.title}>
                     Eerstvolgende vakantie
                 </ThemedText>
@@ -264,7 +264,7 @@ export default function IndexScreen() {
                         </ThemedView>
                     ))}
                 </ScrollView>
-            </ThemedView>
+            </ScrollView>
         </ThemedView>
     );
 }
