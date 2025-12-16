@@ -14,6 +14,7 @@ import { useSchoolYear } from '@/context/SchoolYearContext';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
+import * as Linking from 'expo-linking';
 
 type RegionInfo = {
     region: string;
@@ -140,6 +141,8 @@ export default function IndexScreen() {
         })();
     }, []);
 
+
+
     if (!isLoaded || !yearLoaded) return <Text>Loading...</Text>;
 
     return (
@@ -151,7 +154,7 @@ export default function IndexScreen() {
         >
             {/* GPS */}
             <ThemedView style={styles.mapContainer}>
-                {userLocation && (
+                {userLocation ? (
                     <MapView
                         style={StyleSheet.absoluteFillObject}
                         initialRegion={{
@@ -165,6 +168,13 @@ export default function IndexScreen() {
                     >
                         <Marker coordinate={userLocation.coords} />
                     </MapView>
+                ): (
+                    <ThemedView style={styles.container}>
+                        <ThemedText style={styles.title}>Geen toestemming!</ThemedText>
+                        <Pressable onPress={() => Linking.openSettings()}>
+                            <Text style={styles.button}>Vraag toestemming</Text>
+                        </Pressable>
+                    </ThemedView>
                 )}
             </ThemedView>
 
@@ -276,6 +286,7 @@ const styles = StyleSheet.create({
     infoContainer: { flex: 1, padding: 16 },
     title: { fontSize: 22, fontWeight: 'bold', textAlign: 'center' },
     subtitle: { textAlign: 'center', marginBottom: 12 },
+    button: { textAlign: 'center',margin: 5, padding: 12, backgroundColor: "#9bbcf5", borderRadius: 12 },
     date: { fontSize: 20, textAlign: 'center' },
 
     locationRow: {
